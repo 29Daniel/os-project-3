@@ -28,4 +28,5 @@ struct node* findU(struct node *head, char* username);
 /////////////////// ROOMLIST //////////////////////////
 
 struct room *createRoom(char *name);
+struct room *findRoom(struct room *head, char *name);
 void removeRoom(struct room **head, char *name);

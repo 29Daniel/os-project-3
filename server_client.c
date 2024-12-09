@@ -11,6 +11,8 @@ extern struct node *head;
 
 extern char *server_MOTD;
 
+extern struct room *roomsHead;
+
 
 /*
  *Main thread for each client.  Receives all messages
@@ -58,6 +60,23 @@ void *client_receive(void *ptr) {
    head = insertFirstU(head, client , username);
    
    // Add the GUEST to the DEFAULT ROOM (i.e. Lobby)
+   pthread_mutex_lock(&rw_lock);
+   struct room *lobby = findRoom(roomsHead, DEFAULT_ROOM);
+   pthread_mutex_unlock(&rw_lock);
+
+   if (lobby) {
+      pthread_mutex_lock(&rw_lock);
+      lobby->users = insertFirstU(lobby->users, client, username);
+      pthread_mutex_unlock(&rw_lock);
+
+      printf("User %s added to Lobby.\n", username);
+   } else {
+      fprintf(stderr, "Default room 'Lobby' not found!\n");
+   }
+
+   // Send a welcome message to the user
+   sprintf(buffer, "Welcome %s! You have been added to the default room: %s.\nchat>", username, DEFAULT_ROOM);
+   send(client, buffer, strlen(buffer), 0);
 
    while (1) {
        

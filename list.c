@@ -100,3 +100,14 @@ void removeRoom(struct room **head, char *name) {
     free(current);
     printf("Room '%s' removed successfully.\n", name);
 }
+
+struct room *findRoom(struct room *head, char *name) {
+    struct room *current = head;
+    while (current != NULL) {
+        if (strcmp(current->name, name) == 0) {
+            return current;
+        }
+        current = current->next;
+    }
+    return NULL; // Not found
+}
