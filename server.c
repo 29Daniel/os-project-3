@@ -21,6 +21,16 @@ struct node *head = NULL;
 int main(int argc, char **argv) {
 
    signal(SIGINT, sigintHandler);
+
+   if (pthread_mutex_init(&user_mutex, NULL) != 0) {
+        perror("Failed to initialize user mutex");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pthread_mutex_init(&room_mutex, NULL) != 0) {
+        perror("Failed to initialize room mutex");
+        exit(EXIT_FAILURE);
+    }
     
    //////////////////////////////////////////////////////
    // create the default room for all clients to join when 
