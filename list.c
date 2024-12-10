@@ -1,113 +1,178 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
 #include "list.h"
 
-//insert link at the first location
+// Insert a new user at the beginning of the user list
 struct node* insertFirstU(struct node *head, int socket, char *username) {
-    
-   if(findU(head,username) == NULL) {
-           
-       //create a link
-       struct node *link = (struct node*) malloc(sizeof(struct node));
+    pthread_mutex_lock(&user_mutex); // Lock before accessing shared user list
 
-       link->socket = socket;
-       strcpy(link->username,username);
-       
-       //point it to old first node
-       link->next = head;
-
-       //point first to new first node
-       head = link;
- 
-   }
-   else
-       printf("Duplicate: %s\n", username);
-   return head;
-}
-
-//find a link with given user
-struct node* findU(struct node *head, char* username) {
-
-   //start from the first link
-   struct node* current = head;
-
-   //if list is empty
-   if(head == NULL) {
-      return NULL;
-   }
-
-   //navigate through list
-    while(strcmp(current->username, username) != 0) {
-	
-      //if it is last node
-      if(current->next == NULL) {
-         return NULL;
-      } else {
-         //go to next link
-         current = current->next;
-      }
-   }      
-	
-   //if username found, return the current Link
-   return current;
-}  
-
-// Room Functions
-
-// Create a new room
-struct room *createRoom(char *name) {
-    struct room *newRoom = (struct room *)malloc(sizeof(struct room));
-    if (!newRoom) {
-        perror("Failed to allocate memory for new room");
-        return NULL;
+    if(findU(head, username) == NULL) {
+        struct node *link = (struct node*) malloc(sizeof(struct node));
+        if (!link) {
+            perror("Failed to allocate memory");
+            pthread_mutex_unlock(&user_mutex);
+            return head;
+        }
+        link->socket = socket;
+        strcpy(link->username, username);
+        link->next = head;
+        head = link;
+    } else {
+        printf("Duplicate username: %s\n", username);
     }
-    strcpy(newRoom->name, name);
-    newRoom->users = NULL;
-    newRoom->next = NULL;
-    return newRoom;
+
+    pthread_mutex_unlock(&user_mutex);
+    return head;
 }
 
-// Remove a room from the linked list
-void removeRoom(struct room **head, char *name) {
-    if (*head == NULL) return;
+// Find a user by username
+struct node* findU(struct node *head, char* username) {
+    pthread_mutex_lock(&user_mutex);
 
-    struct room *current = *head;
-    struct room *prev = NULL;
+    struct node* current = head;
+    while (current) {
+        if (strcmp(current->username, username) == 0) {
+            pthread_mutex_unlock(&user_mutex);
+            return current;
+        }
+        current = current->next;
+    }
 
-    // Search for the room
-    while (current != NULL && strcmp(current->name, name) != 0) {
+    pthread_mutex_unlock(&user_mutex);
+    return NULL;
+}
+
+// Remove a user from the user list by their socket
+void removeUser(struct node **head, int socket) {
+    pthread_mutex_lock(&user_mutex);
+
+    struct node *current = *head;
+    struct node *prev = NULL;
+
+    while (current) {
+        if (current->socket == socket) {
+            if (prev) {
+                prev->next = current->next;
+            } else {
+                *head = current->next;
+            }
+            free(current);
+            pthread_mutex_unlock(&user_mutex);
+            return;
+        }
         prev = current;
         current = current->next;
     }
 
-    // Room not found
+    pthread_mutex_unlock(&user_mutex);
+}
+
+// Create a new room
+struct room *createRoom(char *name) {
+    pthread_mutex_lock(&room_mutex);
+
+    struct room *newRoom = (struct room *)malloc(sizeof(struct room));
+    if (!newRoom) {
+        perror("Failed to allocate memory for new room");
+        pthread_mutex_unlock(&room_mutex);
+        return NULL;
+    }
+
+    strcpy(newRoom->name, name);
+    newRoom->users = NULL;
+    newRoom->next = NULL;
+
+    pthread_mutex_unlock(&room_mutex);
+    return newRoom;
+}
+
+// Find a room by name
+struct room *findRoom(struct room *head, char *name) {
+    pthread_mutex_lock(&room_mutex);
+
+    struct room *current = head;
+    while (current) {
+        if (strcmp(current->name, name) == 0) {
+            pthread_mutex_unlock(&room_mutex);
+            return current;
+        }
+        current = current->next;
+    }
+
+    pthread_mutex_unlock(&room_mutex);
+    return NULL;
+}
+
+// Remove a room from the list
+void removeRoom(struct room **head, char *name) {
+    pthread_mutex_lock(&room_mutex);
+
+    struct room *current = *head;
+    struct room *prev = NULL;
+
+    while (current && strcmp(current->name, name) != 0) {
+        prev = current;
+        current = current->next;
+    }
+
     if (current == NULL) {
         printf("Room '%s' not found.\n", name);
+        pthread_mutex_unlock(&room_mutex);
         return;
     }
 
-    // Remove the room
     if (prev == NULL) {
-        // Removing the head
         *head = current->next;
     } else {
         prev->next = current->next;
     }
 
-    // Free the memory
     free(current);
     printf("Room '%s' removed successfully.\n", name);
+
+    pthread_mutex_unlock(&room_mutex);
 }
 
-struct room *findRoom(struct room *head, char *name) {
-    struct room *current = head;
-    while (current != NULL) {
-        if (strcmp(current->name, name) == 0) {
-            return current;
+// Add a user to a room
+void addUserToRoom(struct room *room, struct node *user) {
+    pthread_mutex_lock(&room_mutex);
+
+    if (!room->users) {
+        room->users = user;
+    } else {
+        struct node *current = room->users;
+        while (current->next) {
+            if (current->socket == user->socket) {
+                pthread_mutex_unlock(&room_mutex);
+                return; // Avoid duplicates
+            }
+            current = current->next;
         }
+        current->next = user;
+    }
+
+    pthread_mutex_unlock(&room_mutex);
+}
+
+// Remove a user from a room
+void removeUserFromRoom(struct room *room, struct node *user) {
+    pthread_mutex_lock(&room_mutex);
+
+    struct node *current = room->users;
+    struct node *prev = NULL;
+
+    while (current) {
+        if (current->socket == user->socket) {
+            if (prev) {
+                prev->next = current->next;
+            } else {
+                room->users = current->next;
+            }
+            free(current);
+            break;
+        }
+        prev = current;
         current = current->next;
     }
-    return NULL; // Not found
+
+    pthread_mutex_unlock(&room_mutex);
 }
+
